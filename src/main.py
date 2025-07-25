@@ -7,8 +7,7 @@ from dotenv import load_dotenv
 
 from .data.test_dataset import create_test_dataset
 from .agent.mock_agent import MockK8sAgent
-from .evaluator.llm_evaluator import LLMEvaluator
-from .evaluator.langsmith_evaluator import LangSmithEvaluator
+from .evaluator.langsmith_eval import LangSmithEvaluator
 from .metrics.evaluator_metrics import MetricsCalculator
 from .data.schemas import EvaluationResult, AgentResponse
 
@@ -21,14 +20,12 @@ class K8sAgentEvaluationSystem:
     def __init__(self, config: Dict[str, Any] = None):
         self.config = config or {}
         self.dataset = create_test_dataset()
-        self.llm_evaluator = LLMEvaluator(config.get("llm_config", {}))
-        self.langsmith_evaluator = LangSmithEvaluator(config.get("langsmith_config", {}))
+        self.evaluator = LangSmithEvaluator(config.get("evaluator_config", {}))
         self.metrics_calculator = MetricsCalculator()
         
     async def evaluate_agent(
         self, 
         agent: MockK8sAgent,
-        use_langsmith: bool = True,
         sample_size: int = None
     ) -> Dict[str, Any]:
         """Evaluate an agent on the test dataset"""
@@ -43,24 +40,16 @@ class K8sAgentEvaluationSystem:
             response = await agent.process_query(test_case.query)
             responses.append(response)
         
-        # Evaluate responses
+        # Evaluate responses using unified LangSmith evaluator
         evaluation_results = []
-        evaluator = self.langsmith_evaluator if use_langsmith else self.llm_evaluator
-        
         for test_case, response in zip(test_cases, responses):
             print(f"Evaluating response for: {test_case.query.query_id}")
-            result = await evaluator.evaluate_single(
+            result = await self.evaluator.evaluate_single(
                 test_case.query,
                 response,
                 test_case.ground_truth
             )
             evaluation_results.append(result)
-            
-            # Add to LangSmith dataset if using LangSmith
-            if use_langsmith and result.overall_score > 0.8:
-                self.langsmith_evaluator.add_few_shot_example(
-                    test_case, response, result
-                )
         
         # Calculate metrics
         type_mapping = {tc.query.query_id: tc.query.query_type for tc in test_cases}
@@ -79,7 +68,7 @@ class K8sAgentEvaluationSystem:
             ),
             "evaluation_metadata": {
                 "total_test_cases": len(test_cases),
-                "evaluator_used": "langsmith" if use_langsmith else "llm",
+                "evaluator_used": "langsmith",
                 "timestamp": datetime.now().isoformat(),
                 "agent_quality_level": agent.quality_level
             }
@@ -177,7 +166,6 @@ async def main():
         agent = MockK8sAgent(quality_level=quality_level)
         results = await evaluation_system.evaluate_agent(
             agent, 
-            use_langsmith=True,
             sample_size=5  # Use subset for demo
         )
         

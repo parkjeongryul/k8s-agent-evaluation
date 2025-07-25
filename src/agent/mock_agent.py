@@ -1,6 +1,6 @@
 import asyncio
 import random
-from typing import Dict, Any
+from typing import Dict, Any, List
 from uuid import uuid4
 from ..data.schemas import K8sQuery, AgentResponse
 
@@ -76,7 +76,7 @@ class MockK8sAgent:
         """Process a K8s query and return a response"""
         await asyncio.sleep(random.uniform(0.5, 2.0))
         
-        query_type = query.query_type.value
+        query_type = query.query_type if isinstance(query.query_type, str) else query.query_type.value
         templates = self.response_templates.get(
             query_type, 
             self.response_templates["error_analysis"]

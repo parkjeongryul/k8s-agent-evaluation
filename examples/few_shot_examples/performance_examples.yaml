@@ -1,0 +1,93 @@
+category: performance
+description: "전문가가 작성한 K8s 성능 최적화 우수 응답 예시"
+created_by: "K8s 성능 전문가"
+last_updated: "2024-01-20"
+
+examples:
+  - id: "perf_001"
+    query:
+      type: "performance"
+      user_query: "Elasticsearch 클러스터 검색 응답시간이 느립니다. 현재 평균 2초인데 500ms 이하로 줄이고 싶습니다."
+      context:
+        application: "elasticsearch"
+        current_response_time: "2000ms"
+        target_response_time: "500ms"
+        cluster_size: "3 nodes"
+        data_size: "500GB"
+    
+    expert_response: |
+      Elasticsearch 성능 최적화를 위한 단계별 접근:
+      
+      **1. 즉시 적용 가능한 최적화:**
+      ```yaml
+      # 리소스 최적화
+      resources:
+        requests:
+          memory: "8Gi"
+          cpu: "2"
+        limits:
+          memory: "16Gi"
+          cpu: "4"
+      env:
+        - name: ES_JAVA_OPTS
+          value: "-Xms8g -Xmx8g"  # 힙 크기 = 메모리의 50%
+      ```
+      
+      **2. 스토리지 최적화:**
+      - SSD 기반 StorageClass 사용
+      - 노드 어피니티로 SSD 노드에 배치
+      ```yaml
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: node-type
+              operator: In
+              values: ["ssd-optimized"]
+      ```
+      
+      **3. 애플리케이션 레벨 최적화:**
+      - 인덱스 샤드 수 최적화: 1샤드당 20-40GB 권장
+      - 검색 쿼리 최적화: filter context 활용
+      - 캐시 활용: query_cache, request_cache 설정
+      
+      **4. 클러스터 스케일링:**
+      ```yaml
+      # HPA 설정
+      spec:
+        minReplicas: 3
+        maxReplicas: 9
+        metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 70
+      ```
+      
+      **성능 모니터링:**
+      ```bash
+      # Elasticsearch 성능 지표 확인
+      curl -X GET "localhost:9200/_nodes/stats/indices"
+      curl -X GET "localhost:9200/_cluster/health"
+      ```
+    
+    expert_reasoning: |
+      Elasticsearch 성능 최적화는 레이어별 접근이 필요합니다:
+      1) 인프라 레벨 (CPU, 메모리, 스토리지)
+      2) K8s 레벨 (리소스 할당, 노드 배치)
+      3) 애플리케이션 레벨 (ES 설정, 쿼리 최적화)
+      
+      특히 검색 성능은 디스크 I/O가 큰 영향을 미치므로 SSD 사용이 필수입니다.
+      힙 크기는 시스템 메모리의 50%를 넘지 않도록 하여 OS 파일 캐시를 위한 공간을 확보해야 합니다.
+    
+    key_points:
+      - "JVM 힙 크기 최적화 (시스템 메모리의 50%)"
+      - "SSD 기반 스토리지 사용"
+      - "노드 어피니티를 통한 최적 배치"
+      - "샤드 크기 최적화 (20-40GB/샤드)"
+      - "HPA를 통한 동적 스케일링"
+      - "성능 모니터링 지표 제공"
+    
+    quality_score: 0.94
